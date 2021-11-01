@@ -4,11 +4,14 @@
 
 #include "vulkan_context.h"
 
+#define MAX_FRAMES_IN_FLIGHT 2
+#define APP_NAME "Vulkan"
+#define WIDTH 800
+#define HEIGHT 600
+
 namespace app {
 
-GLFWwindow* initializeWindow(const int width,
-                             const int height,
-                             const char* title) {
+auto initializeWindow(const int width, const int height, const char* title) -> GLFWwindow* {
     glfwInit();
 
     // Don't initialize OpenGL context
@@ -18,51 +21,65 @@ GLFWwindow* initializeWindow(const int width,
     return glfwCreateWindow(width, height, title, nullptr, nullptr);
 }
 
-void cleanup(GLFWwindow* window) {
+auto cleanup(GLFWwindow* window) -> void {
     glfwDestroyWindow(window);
     glfwTerminate();
 }
-}  // namespace app
 
-const char* AppName = "Vulkan";
-const uint32_t Width = 800;
-const uint32_t Height = 600;
+}  // namespace app
 
 int main() {
     try {
-        auto windowPtr = app::initializeWindow(Width, Height, AppName);
+        auto windowPtr = app::initializeWindow(WIDTH, HEIGHT, APP_NAME);
 
-        auto instance = vulkanctx::createInstance(AppName);
+        auto instance = vulkanctx::createInstance(APP_NAME);
         auto debugMessenger = vulkanctx::setupDebugMessenger(instance);
         auto surface = vulkanctx::createSurface(instance, windowPtr);
         auto physicalDevice = vulkanctx::pickPhysicalDevice(instance, surface);
-        auto logicalDevice =
-            vulkanctx::createLogicalDevice(physicalDevice, surface);
+        auto device = vulkanctx::createLogicalDevice(physicalDevice, surface);
 
-        auto graphicsQueue =
-            vulkanctx::getGraphicsQueue(logicalDevice, physicalDevice, surface);
-        auto presentQueue =
-            vulkanctx::getPresentQueue(logicalDevice, physicalDevice, surface);
+        auto graphicsQueue = vulkanctx::getGraphicsQueue(device, physicalDevice, surface);
+        auto presentQueue = vulkanctx::getPresentQueue(device, physicalDevice, surface);
 
-        auto [swapChain, imageCount, swapChainImageFormat, extent] =
-            vulkanctx::createSwapChain(
-                logicalDevice, physicalDevice, surface, windowPtr);
+        auto swapChain = vulkanctx::createSwapChain(device, physicalDevice, surface, windowPtr);
+        auto swapChainImages = vulkanctx::retriveSwapChainImages(device, swapChain.handle, swapChain.count);
+        auto swapChainImageViews = vulkanctx::createImageViews(device, swapChainImages, swapChain.format);
 
-        auto images = vulkanctx::retriveSwapChainImages(
-            logicalDevice, swapChain, imageCount);
+        auto renderPass = vulkanctx::createRenderPass(device, swapChain.format);
+        auto graphicsPipeline = vulkanctx::createGraphicsPipeline(device, renderPass, swapChain.extent);
+        auto framebuffers = vulkanctx::createFramebuffers(device, renderPass, swapChainImageViews, swapChain.extent);
 
-        auto imageViews = vulkanctx::createImageViews(
-            logicalDevice, images, swapChainImageFormat);
+        auto commandPool = vulkanctx::createCommandPool(device, physicalDevice, surface);
+        auto commandBuffers = vulkanctx::createCommandBuffers(
+            device, swapChain.extent, renderPass, graphicsPipeline.handle, commandPool, framebuffers);
+
+        auto synchronizationObject =
+            vulkanctx::createSynchronizationObject(device, MAX_FRAMES_IN_FLIGHT, swapChainImages.size());
+
+        size_t currentFrame = 0;
 
         while (!glfwWindowShouldClose(windowPtr)) {
             glfwPollEvents();
+
+            vulkanctx::drawFrame(
+                device, swapChain, commandBuffers, graphicsQueue, presentQueue, synchronizationObject, currentFrame);
+
+            currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
         }
 
+        vkDeviceWaitIdle(device);
+
         vulkanctx::cleanup(instance,
-                           logicalDevice,
+                           device,
                            surface,
-                           swapChain,
-                           imageViews,
+                           swapChain.handle,
+                           swapChainImageViews,
+                           renderPass,
+                           graphicsPipeline.layout,
+                           graphicsPipeline.handle,
+                           framebuffers,
+                           commandPool,
+                           synchronizationObject,
                            debugMessenger);
         app::cleanup(windowPtr);
 

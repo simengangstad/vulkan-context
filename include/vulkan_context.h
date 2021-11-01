@@ -9,42 +9,91 @@
 
 namespace vulkanctx {
 
-VkDebugUtilsMessengerEXT setupDebugMessenger(VkInstance instance);
+struct SwapChain {
+    VkSwapchainKHR handle;
+    uint32_t count;
+    VkFormat format;
+    VkExtent2D extent;
+};
 
-VkInstance createInstance(const char* application_name);
+struct GraphicsPipeline {
+    VkPipelineLayout layout;
+    VkPipeline handle;
+};
 
-VkSurfaceKHR createSurface(VkInstance instance, GLFWwindow* window);
+struct SynchronizationObject {
+    const uint32_t amount;
+    std::vector<VkSemaphore> renderFinishedSemaphores;
+    std::vector<VkSemaphore> imageAvailableSemaphores;
+    std::vector<VkFence> inFlightFences;
+    std::vector<VkFence> imagesInFlight;
+};
 
-VkPhysicalDevice pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface);
+auto setupDebugMessenger(const VkInstance& instance) -> VkDebugUtilsMessengerEXT;
 
-VkDevice createLogicalDevice(VkPhysicalDevice physicalDevice,
-                             VkSurfaceKHR surface);
+auto createInstance(const char* application_name) -> VkInstance;
+auto createSurface(const VkInstance& instance, GLFWwindow* window) -> VkSurfaceKHR;
+auto pickPhysicalDevice(const VkInstance& instance, const VkSurfaceKHR& surface) -> VkPhysicalDevice;
+auto createLogicalDevice(const VkPhysicalDevice& physicalDevice, const VkSurfaceKHR& surface) -> VkDevice;
 
-VkQueue getGraphicsQueue(VkDevice device,
-                         VkPhysicalDevice physicalDevice,
-                         VkSurfaceKHR surface);
+auto getGraphicsQueue(const VkDevice& device, const VkPhysicalDevice& physicalDevice, const VkSurfaceKHR& surface)
+    -> VkQueue;
+auto getPresentQueue(const VkDevice& device, const VkPhysicalDevice& physicalDevice, const VkSurfaceKHR& surface)
+    -> VkQueue;
 
-VkQueue getPresentQueue(VkDevice device,
-                        VkPhysicalDevice physicalDevice,
-                        VkSurfaceKHR surface);
-std::tuple<VkSwapchainKHR, uint32_t, VkFormat, VkExtent2D> createSwapChain(
-    VkDevice device,
-    VkPhysicalDevice physicalDevice,
-    VkSurfaceKHR surface,
-    GLFWwindow* glfwWindowPtr);
+auto createSwapChain(const VkDevice& device,
+                     const VkPhysicalDevice& physicalDevice,
+                     const VkSurfaceKHR& surface,
+                     GLFWwindow* glfwWindowPtr) -> SwapChain;
 
-std::vector<VkImage> retriveSwapChainImages(VkDevice device,
-                                            VkSwapchainKHR swapChain,
-                                            uint32_t& imageCount);
+auto retriveSwapChainImages(const VkDevice& device, const VkSwapchainKHR& swapChain, uint32_t& imageCount)
+    -> std::vector<VkImage>;
+auto createImageViews(const VkDevice& device,
+                      const std::vector<VkImage>& swapChainImages,
+                      const VkFormat& swapChainImageFormat) -> std::vector<VkImageView>;
 
-std::vector<VkImageView> createImageViews(VkDevice device,
-                                          std::vector<VkImage>& swapChainImages,
-                                          VkFormat swapChainImageFormat);
-void cleanup(VkInstance instance,
-             VkDevice device,
-             VkSurfaceKHR surface,
-             VkSwapchainKHR swapChain,
-             std::vector<VkImageView> swapChainImageViews,
-             VkDebugUtilsMessengerEXT debugMessenger);
+auto createRenderPass(const VkDevice& device, const VkFormat& swapChainFormat) -> VkRenderPass;
+auto createGraphicsPipeline(const VkDevice& device, const VkRenderPass& renderPass, const VkExtent2D& swapChainExtent)
+    -> vulkanctx::GraphicsPipeline;
+
+auto createFramebuffers(const VkDevice& device,
+                        const VkRenderPass& renderPass,
+                        const std::vector<VkImageView>& swapChainImageViews,
+                        const VkExtent2D& swapChainExtent) -> std::vector<VkFramebuffer>;
+
+auto createCommandPool(const VkDevice& device, const VkPhysicalDevice& physicalDevice, const VkSurfaceKHR& surface)
+    -> VkCommandPool;
+auto createCommandBuffers(const VkDevice& device,
+                          const VkExtent2D& swapChainExtent,
+                          const VkRenderPass& renderPass,
+                          const VkPipeline& graphicsPipeline,
+                          const VkCommandPool& commandPool,
+                          const std::vector<VkFramebuffer>& swapChainFramebuffers) -> std::vector<VkCommandBuffer>;
+
+auto createSynchronizationObject(const VkDevice& device, const uint32_t& amount, const uint32_t& swapChainImagesSize)
+    -> SynchronizationObject;
+
+auto drawFrame(const VkDevice& device,
+               const vulkanctx::SwapChain& swapChain,
+               const std::vector<VkCommandBuffer>& commandBuffers,
+               const VkQueue& graphicsQueue,
+               const VkQueue& presentQueue,
+               SynchronizationObject& synchronizationObject,
+               const uint32_t& currentFrame) -> void;
+
+auto recreateSwapChain(const VkDevice& device) -> void;
+
+auto cleanup(const VkInstance& instance,
+             const VkDevice& device,
+             const VkSurfaceKHR& surface,
+             const VkSwapchainKHR& swapChain,
+             const std::vector<VkImageView>& swapChainImageViews,
+             const VkRenderPass& renderPass,
+             const VkPipelineLayout& pipelineLayout,
+             const VkPipeline& pipeline,
+             const std::vector<VkFramebuffer>& frambuffers,
+             const VkCommandPool& commandPool,
+             const SynchronizationObject& synchronizationObject,
+             const VkDebugUtilsMessengerEXT& debugMessenger) -> void;
 
 }  // namespace vulkanctx
